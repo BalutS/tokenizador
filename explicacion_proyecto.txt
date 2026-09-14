@@ -12,7 +12,7 @@ identificadores, operadores, literales de texto/números y delimitadores).
 
 El diseño está implementado sin librerías externas de lexing (como Lex/Flex)
 ni expresiones regulares del lenguaje. En su lugar, utiliza un Autómata Finito
-Determinista (AFD) con una tabla de transiciones bidimensional explicita y la
+Determinista (AFD) con una tabla de transiciones bidimensional explícita y la
 técnica clásica de simulación de AFD mediante "maximal munch" (coincidencia más
 larga) con retroceso (rollback).
 
@@ -32,86 +32,88 @@ El flujo completo de ejecución sigue los siguientes pasos:
 
 3) Solicitud Repetitiva de Tokens (Bucle Principal):
    - `Main` entra en un bucle continuo donde llama iterativamente al método
-     `lexer.nextToken()`.
+     `lexico.siguienteToken()`.
 
 4) Limpieza de Espacios y Comentarios (Clase Lexer):
-   - Antes de iniciar la lectura de un token, `nextToken()` invoca a
-     `skipWhitespaceAndComments()`.
+   - Antes de iniciar la lectura de un token, `siguienteToken()` invoca a
+     `omitirEspaciosYComentarios()`.
    - Este método descarta espacios en blanco (' '), tabulaciones ('\t'), saltos
      de línea ('\n', '\r'), comentarios de una sola línea (`//...`) y comentarios
-     multilinea (`/*...*/`), manteniendo actualizado el contador de líneas.
+     multilínea (`/*...*/`), manteniendo actualizado el contador de líneas.
 
-5) Simulación del AFD y "Maximal Munch" (Método `scanWithTable`):
-   - El Lexer toma el carácter actual y determina su "clase de carácter" (columna).
-   - Comienza desde el estado inicial (`START` = 0) y consulta la tabla de
-     transiciones (`table[estado_actual][clase_caracter]`).
-   - Si la transición es válida (diferente de `DEAD`), avanza en el texto y pasa al
+5) Simulación del AFD y "Maximal Munch" (Método `escanearConTabla`):
+   - El Lexer toma el carácter actual y determina su "clase de carácter" (columna)
+     usando `clasificar(char c)`.
+   - Comienza desde el estado inicial (`INICIO` = 0) y consulta la tabla de
+     transiciones (`tabla[estadoActual][clase]`).
+   - Si la transición es válida (diferente de `MUERTO`), avanza en el texto y pasa al
      siguiente estado.
-   - Si el nuevo estado es de aceptación (indicado en el arreglo `accept`), el Lexer
+   - Si el nuevo estado es de aceptación (indicado en el arreglo `aceptacion`), el Lexer
      recuerda este estado y la posición en el texto como "última coincidencia válida".
    - Continúa consumiendo caracteres mientras existan transiciones válidas para
      lograr la coincidencia más larga posible ("maximal munch").
 
 6) Retroceso (Rollback) y Generación de Token:
-   - Cuando se alcanza un "estado muerto" (`DEAD`), el proceso de avance se detiene.
+   - Cuando se alcanza un "estado muerto" (`MUERTO`), el proceso de avance se detiene.
    - Si se registró al menos un estado de aceptación previo, el Lexer retrocede
      su puntero de lectura hasta la posición de esa última coincidencia válida.
    - Extrae el texto fuente equivalente al lexema reconocido.
    - Si el token reconocido fue identificado genéricamente como un identificador
-     (`ID`), se consulta el mapa `KEYWORDS` para verificar si corresponde a una
-     palabra reservada del lenguaje (como `if`, `while`, `int`, etc.).
+     (`TipoToken.IDENTIFICADOR`), se consulta el mapa `PALABRAS_RESERVADAS` para
+     verificar si corresponde a una palabra reservada del lenguaje (como `if`,
+     `while`, `int`, etc.).
    - Se crea y retorna un objeto `Token` con su tipo, lexema y línea inicial.
    - Si no se alcanzó ningún estado de aceptación, se genera un token de tipo
-     `ERROR` indicando el símbolo no reconocido.
+     `TipoToken.ERROR` indicando el símbolo no reconocido.
 
 7) Impresión y Finalización (Clase Main):
    - `Main` recibe cada token e imprime en la salida estándar el resultado con el
      formato: `Token: TIPO "lexema"`.
    - Si se encuentra un token de tipo `ERROR`, se reporta por salida de error estándar.
-   - El proceso finaliza cuando el `Lexer` retorna el tipo de token `TokenType.EOF`
-     (End Of File).
+   - El proceso finaliza cuando el `Lexer` retorna el tipo de token `TipoToken.FIN_ARCHIVO`.
 
 
 3. EXPLICACIÓN DETALLADA DE CADA CLASE Y SUS MÉTODOS
 ------------------------------------------------------------------------
 
 ------------------------------------------------------------------------
-A. Clase `TokenType` (enum en TokenType.java)
+A. Clase `TipoToken` (enum en TipoToken.java)
 ------------------------------------------------------------------------
-Define todos los tipos de componentes léxicos posibles que puede reconocer el escaner.
+Define todos los tipos de componentes léxicos posibles que puede reconocer el escáner.
 
-Categorías principales de valores numéricos/enum:
+Categorías principales de valores enum:
 - Palabras Reservadas Principales: INT, MAIN, VOID, BREAK, DO, ELSE, IF, WHILE,
   RETURN, READ (scanf), WRITE (printf).
 - Palabras Reservadas Adicionales de C: AUTO, DOUBLE, STRUCT, LONG, SWITCH, CASE,
   ENUM, REGISTER, TYPEDEF, CHAR, EXTERN, UNION, CONST, FLOAT, SHORT, UNSIGNED,
   CONTINUE, FOR, SIGNED, GOTO, SIZEOF, VOLATILE, STATIC, DEFAULT.
 - Operadores y Símbolos Especiales:
-  * Delimitadores: LBRACE ({), RBRACE (}), LSQUARE ([), RSQUARE (]), LPAR ((), RPAR ()),
-    SEMI (;), COMMA (,), DOT (.), ARROW (->).
-  * Aritméticos / Bits: PLUS (+), MINUS (-), MUL_OP (*), DIV_OP (/), XOR_OP (^), NOT_BIT (~).
-  * Lógicos y Relacionales: AND_OP (&), OR_OP (|), NOT_OP (!), ASSIGN (=), LT (<), GT (>),
-    SHL_OP (<<), SHR_OP (>>), EQ (==), NOTEQ (!=), LTEQ (<=), GTEQ (>=), ANDAND (&&), OROR (||).
-- Literales: INT_NUM (números enteros), ID (identificadores de variables/funciones),
-  STRING_LIT (cadenas entre comillas dobles), CHAR_LIT (caracteres individuales entre comillas simples).
-- Control: EOF (Fin de archivo) y ERROR (Error léxico por símbolo no válido).
+  * Delimitadores: LLAVE_IZQ ({), LLAVE_DER (}), CORCHETE_IZQ ([), CORCHETE_DER (]),
+    PAREN_IZQ ((), PAREN_DER ()), PUNTO_Y_COMA (;), COMA (,), PUNTO (.), FLECHA (->).
+  * Aritméticos / Bits: MAS (+), MENOS (-), MULTIPLICACION (*), DIVISION (/), XOR_BIT (^), NOT_BIT (~).
+  * Lógicos y Relacionales: AND_BIT (&), OR_BIT (|), NOT_LOGICO (!), ASIGNACION (=),
+    MENOR (<), MAYOR (>), DESPLAZAR_IZQ (<<), DESPLAZAR_DER (>>), IGUALDAD (==),
+    DIFERENTE (!=), MENOR_IGUAL (<=), MAYOR_IGUAL (>=), AND_LOGICO (&&), OR_LOGICO (||).
+- Literales: NUMERO_ENTERO (números enteros), IDENTIFICADOR (identificadores de variables/funciones),
+  LITERAL_CADENA (cadenas entre comillas dobles), LITERAL_CARACTER (caracteres entre comillas simples).
+- Control: FIN_ARCHIVO (Fin de archivo) y ERROR (Error léxico por símbolo no válido).
 
 
 ------------------------------------------------------------------------
 B. Clase `Token` (Token.java)
 ------------------------------------------------------------------------
-Representa una unidad léxica o token producido por el lexer. Es una clase inmutable.
+Representa una unidad léxica o token producido por el lexer.
 
 Atributos:
-- `type` (TokenType): El tipo al que pertenece el token.
-- `lexeme` (String): La secuencia exacta de caracteres del código fuente.
-- `line` (int): Número de línea donde fue encontrado.
+- `tipo` (TipoToken): El tipo al que pertenece el token.
+- `lexema` (String): La secuencia exacta de caracteres del código fuente.
+- `linea` (int): Número de línea donde fue encontrado.
 
 Métodos:
-- `Token(TokenType type, String lexeme, int line)`: Constructor que inicializa los campos.
-- `getType()`: Devuelve el tipo del token (`TokenType`).
-- `getLexeme()`: Devuelve el texto del lexema (`String`).
-- `getLine()`: Devuelve la línea donde inició el token (`int`).
+- `Token(TipoToken tipo, String lexema, int linea)`: Constructor que inicializa los campos.
+- `obtenerTipo()`: Devuelve el tipo del token (`TipoToken`).
+- `obtenerLexema()`: Devuelve el texto del lexema (`String`).
+- `obtenerLinea()`: Devuelve la línea donde inició el token (`int`).
 - `toString()`: Formatea el token para imprimirlo en pantalla según el formato
   requerido: `Token: TIPO "lexema"`.
 
@@ -123,13 +125,13 @@ Punto de entrada de la aplicación. Maneja la interacción con el sistema operat
 y el archivo de entrada.
 
 Métodos:
-- `main(String[] args)`:
+- `main(String[] argumentos)`:
   1. Verifica que se haya pasado la ruta del archivo como argumento.
-  2. Lee el contenido del archivo utilizando `Files.readString(Path.of(args[0]))`.
+  2. Lee el contenido del archivo utilizando `Files.readString(Path.of(argumentos[0]))`.
   3. Instancia el `Lexer`.
-  4. Ejecuta un bucle `while (true)` que llama a `lexer.nextToken()`.
+  4. Ejecuta un bucle `while (true)` que llama a `lexico.siguienteToken()`.
   5. Procesa los tokens: imprime tokens válidos, acumula y muestra errores léxicos,
-     y detiene el bucle al recibir `TokenType.EOF`.
+     y detiene el bucle al recibir `TipoToken.FIN_ARCHIVO`.
 
 
 ------------------------------------------------------------------------
@@ -140,57 +142,49 @@ Clase principal que implementa el analizador léxico mediante el autómata deter
 Estructura Interna y Atributos:
 - Constantes `CLS_*` (0 a 26): Representan la columna en la tabla de transiciones
   para cada categoría de carácter (ej. letras, dígitos, comillas, símbolos).
-- Constantes de Estados (`START`, `ID_STATE`, `NUM_STATE`, etc., y `DEAD` = -1):
+- Constantes de Estados (`INICIO`, `ESTADO_ID`, `ESTADO_NUM`, etc., y `MUERTO` = -1):
   Representan las filas de la tabla de transiciones.
-- `table[][]` (int[40][27]): Matriz bidimensional que almacena la función de transición
-  `δ(estado, clase_caracter) = nuevo_estado`.
-- `accept[]` (TokenType[40]): Arreglo unidimensional que mapea cada estado final/de
-  aceptación con su correspondiente `TokenType`.
-- `KEYWORDS` (Map<String, TokenType>): Tabla hash estática para mapear lexemas de
-  palabras clave (ej: "if", "return", "int") a su `TokenType` específico.
-- `src` (char[]): Código fuente convertido en un arreglo de caracteres para acceso rápido.
-- `pos` (int): Índice del carácter actual en `src`.
-- `line` (int): Número de línea actual en el análisis.
-- `length` (int): Tamaño total del código fuente.
+- `tabla[][]` (int[40][27]): Matriz bidimensional que almacena la función de transición.
+- `aceptacion[]` (TipoToken[40]): Arreglo unidimensional que mapea cada estado final/de
+  aceptación con su correspondiente `TipoToken`.
+- `PALABRAS_RESERVADAS` (Map<String, TipoToken>): Tabla hash estática para mapear lexemas de
+  palabras clave (ej: "if", "return", "int") a su `TipoToken` específico.
+- `fuente` (char[]): Código fuente convertido en un arreglo de caracteres.
+- `posicion` (int): Índice del carácter actual en `fuente`.
+- `linea` (int): Número de línea actual en el análisis.
+- `longitud` (int): Tamaño total del código fuente.
 
 Métodos:
-- `buildTable()` (privado y estático):
-  Construye explícitamente la matriz `table[][]` y el arreglo `accept[]` al cargar la
-  clase. Define las reglas del AFD para identificar números, cadenas, caracteres,
-  identificadores y operadores de 1 y 2 caracteres.
+- `construirTabla()` (privado y estático):
+  Construye explícitamente la matriz `tabla[][]` y el arreglo `aceptacion[]`. Define las
+  reglas del AFD para identificar números, cadenas, caracteres, identificadores y operadores.
 
-- `classify(char c)` (privado y estático):
-  Recibe un carácter y retorna el número de columna (clase `CLS_*`) correspondiente
-  según sea letra, dígito, operador o símbolo especial.
+- `clasificar(char c)` (privado y estático):
+  Recibe un carácter y retorna el número de columna (clase `CLS_*`) correspondiente.
 
-- `Lexer(String source)` (constructor):
-  Inicializa el arreglo de caracteres `src`, la posición en 0 y la línea en 1.
+- `Lexer(String fuente)` (constructor):
+  Inicializa el arreglo de caracteres `fuente`, la posición en 0 y la línea en 1.
 
-- `peek()` (privado):
-  Retorna el carácter actual en `pos` sin avanzar el puntero (o '\0' si es EOF).
+- `echarVistazo()` (privado):
+  Retorna el carácter actual en `posicion` sin avanzar el puntero (o '\0' si es fin de archivo).
 
-- `peekNext()` (privado):
-  Retorna el carácter siguiente (`pos + 1`) sin avanzar el puntero.
+- `echarVistazoSiguiente()` (privado):
+  Retorna el carácter siguiente (`posicion + 1`) sin avanzar el puntero.
 
-- `advance()` (privado):
-  Consume el carácter actual, avanza `pos` y, si encuentra un salto de línea ('\n'),
-  incrementa el contador de líneas (`line`).
+- `avanzar()` (privado):
+  Consume el carácter actual, avanza `posicion` y, si encuentra un salto de línea ('\n'),
+  incrementa el contador `linea`.
 
-- `isAtEnd()` (privado):
-  Indica si se ha llegado al final del arreglo de entrada (`pos >= length`).
+- `estaAlFinal()` (privado):
+  Indica si se ha llegado al final del arreglo de entrada (`posicion >= longitud`).
 
-- `skipWhitespaceAndComments()` (privado):
-  Avanza el puntero omitiendo caracteres invisibles (espacios, saltos de línea, tabulaciones)
-  y comentarios de línea (`//`) o de bloque (`/*...*/`).
+- `omitirEspaciosYComentarios()` (privado):
+  Avanza el puntero omitiendo caracteres invisibles y comentarios (`//` y `/*...*/`).
 
-- `nextToken()` (público):
-  Método principal consumido desde el exterior. Llama a `skipWhitespaceAndComments()`,
-  mide la línea inicial y ejecuta `scanWithTable(startLine)` para retornar el siguiente
-  `Token`, o `TokenType.EOF` si ya no hay más caracteres.
+- `siguienteToken()` (público):
+  Llama a `omitirEspaciosYComentarios()`, mide la línea inicial y ejecuta `escanearConTabla(lineaInicio)`
+  para retornar el siguiente `Token`, o `TipoToken.FIN_ARCHIVO` si ya no hay más caracteres.
 
-- `scanWithTable(int startLine)` (privado):
-  Ejecuta la simulación iterativa de la tabla de transiciones. Mantiene el registro
-  de la coincidencia más larga (`lastAcceptState` y `lastAcceptPos`). Si no hay
-  coincidencias de aceptación, retorna un token de `ERROR`. Si hay coincidencia,
-  avanza los punteros al punto exacto, verifica si el lexema coincide con `KEYWORDS` y
-  retorna el `Token` resultante.
+- `escanearConTabla(int lineaInicio)` (privado):
+  Ejecuta la simulación iterativa de la tabla de transiciones con retroceso ("maximal munch").
+  Retorna el `Token` reconocido o un token de `ERROR` si no hubo coincidencia.
